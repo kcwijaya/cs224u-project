@@ -8,7 +8,6 @@ embed_len = 100
 embedding_path = 'vsmdata/glove.6B/glove.6B.'+ str(embed_len) + 'd.txt'
 
 
-
 def glove2dict(src_filename):
     data = {}
     with open(src_filename, 'rb') as f:
@@ -60,6 +59,8 @@ def batch_data(data_filename, label_filename, batch_size):
             if w not in word_embeddings:
                 w = w.lower()
                 w = w.replace('.', '')
+                w = w.replace('?', '')
+                w = w.replace('!', '')
                 if w not in word_embeddings:
                     continue
             embed_sen.append(word_embeddings[w])
