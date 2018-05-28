@@ -65,10 +65,13 @@ def get_data(name, label):
     with open(label, 'rb') as f:
         labels = pickle.load(f)
     data, labels = filter_data(data, labels)
-    test_x = data[:int(len(data) * test_percentage)]
-    train_x = data[int(len(data) * test_percentage) : ]
-    test_y = labels[:int(len(data) * test_percentage)]
-    train_y = labels[int(len(data) * test_percentage) : ]
+    comb_data = np.array([(data[i], labels[i]) for i in range(len(data))])
+    np.random.shuffle(comb_data)
+    data = comb_data
+    test_x = [p[0] for p in data[:int(len(data) * test_percentage)]]
+    train_x = [p[0] for p in data[int(len(data) * test_percentage) : ]]
+    test_y = [p[1] for p in data[:int(len(data) * test_percentage)]]
+    train_y = [p[1] for p in data[int(len(data) * test_percentage) : ]]
     return train_x, test_x, train_y, test_y
 
 model_choice = {'rnn' : None,
