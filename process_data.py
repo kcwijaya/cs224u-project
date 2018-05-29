@@ -8,5 +8,6 @@ def main():
   pickle.dump(joke_data + wiki_data, open("combined_data.pickle", "wb"))
   pickle.dump(labels, open("labels.pickle", "wb"))
 
+
 if __name__ == '__main__':
   main()
