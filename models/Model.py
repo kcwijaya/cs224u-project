@@ -11,6 +11,7 @@ class Model:
         self.session = tf.Session() 
         self.embedding_size = glove_dims
 
+        print('Building computation graph.')
         with tf.variable_scope("Model", initializer=tf.contrib.layers.variance_scaling_initializer(factor=1.0, uniform=True)):
             # Adds placeholders for x, y, and mask
             self.add_placeholders()
@@ -30,7 +31,7 @@ class Model:
             self.metrics = self.get_metrics(self.y_placeholder, self.predictions)
             
         self.session.run(tf.global_variables_initializer()) 
-        print('Done.') 
+        print('Done building computation graph.') 
 
     def build_graph(self): 
         raise NotImplemented('Must implement build_graph()')
@@ -55,8 +56,38 @@ class Model:
     def predict(self, X, mask, y, batch_size=None): 
         raise NotImplemented('Must implement predict()')
 
-    def fit(self):
-        raise NotImplemented('Must implement train()')
+    # The main train loop
+    def fit(self, train_dataset, train_label_dataset, num_epochs=10):
+        print('Training Model...')
+        best_valid_loss = float('inf')
+        best_valid_accuracy = float('-inf')
+        batches = batch_data_nn('combined_data.pickle', 'labels.pickle', self.batch_size)
+
+        train_batches, (X_valid, X_mask_valid, y_valid), (X_test, X_mask_test, y_test) = split_batches(batches, 0.7, 0.2)
+
+        for epoch in range(1, num_epochs+1):
+            progbar = Progbar(target = len(train_batches)) 
+
+            print('Epoch #{0} out of {1}: '.format(epoch, num_epochs))
+            for batch, (X_batch, mask_batch, y_batch) in enumerate(train_batches):
+                train_loss, _, train_metrics = self.session.run((self.loss, self.train_op, self.metrics), {
+                    self.X_placeholder : X_batch, 
+                    self.y_placeholder: y_batch, 
+                    self.X_mask_placeholder: mask_batch, 
+                    self.is_training : True,
+                })
+                progbar.update(batch+1, [('Train Loss', train_loss), ('Accuracy', train_metrics)])
+
+            print("Epoch complete. Calculating validation loss...")
+
+            print('Training Loss: {0:.4f} {1} Training Accuracy {2:.4f} {3}'.format(train_loss, '*', train_metrics, '*'))
+            print(self.get_stats_table(X_valid, X_mask_valid, y_valid))
+
+        print("All Epochs complete. Calculating test loss...")
+
+        print(self.get_stats_table(X_test, X_mask_test, y_test))
+
+        print("Done training.")
 
     def save(self, filename): 
         directory = os.path.dirname(filename) 
@@ -69,25 +100,10 @@ class Model:
         tf.train.Saver().restore(self.session, filename) 
 
     def get_metrics(self, y, predictions): 
-        # preds = tf.argmax(predictions, 1)
-        # preds = tf.Print(preds, ['preds classes', preds], summarize=200)
-        # true = tf.argmax(y, 1)
-        # true = tf.Print(true, ['true classes', true], summarize=200)
-        # predictions = tf.Print(predictions, ["preds", predictions, tf.shape(predictions)], summarize=self.batch_size)
-        # y = tf.Print(y, ["classes", tf.argmax(y, 1), tf.shape(tf.argmax(y, 1))], summarize=self.batch_size)
         gold = tf.argmax(y, 1)
         correct = tf.equal(predictions, gold)
-        # missclassified = tf.Print(misclassified, ['misclassified', misclassified], summarize=200)
         accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
-        # precision = tf.metrics.precision(gold, predictions)
-        # recall = tf.metrics.recall(gold, predictions)
-        # f1 = sklearn.metrics.f1_score(gold, predictions)
-
         return accuracy
-
-    # def get_accuracies(self, predictions, y):
-    #     misclassified = tf.not_equal(tf.argmax(predictions, 1), tf.argmax(y, 1))
-    #     return tf.not_equal(tf.cast(misclassified, tf.float32))
 
     def get_accuracies(self, predictions, y):
         return np.mean(y == predictions)    

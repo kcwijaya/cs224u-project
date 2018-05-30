@@ -122,27 +122,7 @@ class RNNModel(Model):
 		best_valid_loss = float('inf')
 		best_valid_accuracy = float('-inf')
 		batches = batch_data_nn('combined_data.pickle', 'labels.pickle', self.batch_size)
-		# total_batches = len(batches)
-		# num_train_batches = int(np.ceil(len(batches)*0.7))
-		# num_valid_batches = int(np.ceil(len(batches)*0.9))
-		# train_batches = batches[:num_train_batches]
-		# validation_set = batches[num_train_batches:num_train_batches+num_valid_batches]
-		# test_set = batches[num_train_batches+num_valid_batches:]
 
-		# vx_batches = []
-		# vx_masks =op [] 
-		# vy_batches = [] 
-
-		# for v_batch, (vx_batch, vx_mask, vy_batch) in enumerate(validation_set):
-		# 	vx_batches.append(vx_batch) 
-		# 	vx_masks.append(vx_mask)
-		# 	vy_batches.append(vy_batch) 
-
-		# X_valid = np.concatenate(vx_batches, axis=0)
-		# X_mask_valid = np.concatenate(vx_masks, axis=0)
-		# y_valid = np.concatenate(vy_batches, axis=0)
-
-		# num_batches = len(train_batches)
 		train_batches, (X_valid, X_mask_valid, y_valid), (X_test, X_mask_test, y_test) = split_batches(batches, 0.7, 0.2)
 
 		for epoch in range(1, num_epochs+1):
@@ -150,7 +130,6 @@ class RNNModel(Model):
 
 			print('Epoch #{0} out of {1}: '.format(epoch, num_epochs))
 			for batch, (X_batch, mask_batch, y_batch) in enumerate(train_batches):
-				# print(batch, X_batch, mask_batch, y_batch)
 				train_loss, _, train_metrics = self.session.run((self.loss, self.train_op, self.metrics), {
 					self.X_placeholder : X_batch, 
 					self.y_placeholder: y_batch, 
@@ -161,19 +140,7 @@ class RNNModel(Model):
 
 			print("Epoch complete. Calculating validation loss...")
 
-			# valid_loss, valid_metrics = self.session.run((self.loss, self.metrics), {
-			# 	self.X_placeholder: X_valid, 
-			# 	self.X_mask_placeholder: X_mask_valid, 
-			# 	self.y_placeholder: y_valid, 
-			# 	self.is_training : False,
-			# })
-
-			# if valid_loss <= best_valid_loss:
-			# 	best_valid_loss = valid_loss
-			# 	best_valid_accuracy = valid_metrics
-
 			print('Training Loss: {0:.4f} {1} Training Accuracy {2:.4f} {3}'.format(train_loss, '*', train_metrics, '*'))
-			# print('Validation Loss: {0:.4f} {1} Validation Accuracy {2:.4f} {3}'.format(valid_loss, '*', valid_metrics, '*'))
 			print(self.get_stats_table(X_valid, X_mask_valid, y_valid))
 
 		print("All Epochs complete. Calculating test loss...")

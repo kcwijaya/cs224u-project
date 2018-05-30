@@ -147,16 +147,16 @@ def batch_data_nn(data_filename, label_filename, batch_size):
     return batches
 
 def split_batches(batches, train_split, valid_split):
+    test_split = 1-train_split-valid_split
     total_batches = len(batches)
-    # print(total_batches)
     num_train_batches = int(np.ceil(total_batches*train_split))
     num_valid_batches = int(np.ceil(total_batches*(train_split+valid_split)))
-    # print(num_train_batches, num_valid_batches)
+    num_test_batches = total_batches-num_valid_batches
     train_batches = batches[:num_train_batches]
     validation_set = batches[num_train_batches:num_valid_batches]
     test_set = batches[num_valid_batches:]
 
-    print(len(train_batches), len(validation_set), len(test_set))
+    print("Data composition: train split", train_split, "("+ str(num_train_batches) + ")", "valid split", valid_split, "(" + str(num_valid_batches) + ")", "test split", test_split, "(" + str(num_test_batches) + ")")
 
     valid_batches = get_split(validation_set)
     test_batches = get_split(test_set)
