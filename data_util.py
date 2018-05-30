@@ -145,3 +145,36 @@ def batch_data_nn(data_filename, label_filename, batch_size):
     Y = np.reshape(Y, (actual_count, 2))
     batches = make_batches_nn(X, X_mask, Y, batch_size)
     return batches
+
+def split_batches(batches, train_split, valid_split):
+    total_batches = len(batches)
+    # print(total_batches)
+    num_train_batches = int(np.ceil(total_batches*train_split))
+    num_valid_batches = int(np.ceil(total_batches*(train_split+valid_split)))
+    # print(num_train_batches, num_valid_batches)
+    train_batches = batches[:num_train_batches]
+    validation_set = batches[num_train_batches:num_valid_batches]
+    test_set = batches[num_valid_batches:]
+
+    print(len(train_batches), len(validation_set), len(test_set))
+
+    valid_batches = get_split(validation_set)
+    test_batches = get_split(test_set)
+
+    return train_batches, valid_batches, test_batches
+
+def get_split(dataset): 
+    x_batches = []
+    x_masks = [] 
+    y_batches = [] 
+
+    for batch, (x_batch, x_mask, y_batch) in enumerate(dataset):
+        x_batches.append(x_batch) 
+        x_masks.append(x_mask)
+        y_batches.append(y_batch) 
+
+    X = np.concatenate(x_batches, axis=0)
+    X_mask = np.concatenate(x_masks, axis=0)
+    y = np.concatenate(y_batches, axis=0)
+
+    return (X, X_mask, y)
