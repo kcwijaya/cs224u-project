@@ -1,12 +1,14 @@
 import pickle
 import numpy as np
 import os
+import sys 
 
 # Tune these params.
 max_len = 70
-embed_len = 100
+char_max_len = 20
+embed_len = 300
 embedding_path = 'vsmdata/glove.6B/glove.6B.'+ str(embed_len) + 'd.txt'
-
+char_embedding_path = 'vsmdata/char_embeddings.txt'
 
 def glove2dict(src_filename):
     data = {}
@@ -77,7 +79,7 @@ def batch_data(data_filename, label_filename, batch_size):
     numpy.random.set_state(rng_state)
     numpy.random.shuffle(b)
 
-def make_batches_nn(X, mask, Y, batch_size):
+def make_batches_nn(X, X_char, mask, Y, batch_size):
     state = np.random.get_state()
 
     np.random.shuffle(X)
@@ -85,16 +87,20 @@ def make_batches_nn(X, mask, Y, batch_size):
     np.random.shuffle(mask)
     np.random.set_state(state) 
     np.random.shuffle(Y)
+    np.random.set_state(state)
+    np.random.shuffle(X_char)
 
 
     batches = []
     i = 0
+    print("Making batches...")
     while i*batch_size < X.shape[0]: 
         if i == 0: 
-            batches.append((X[:batch_size], mask[:batch_size], Y[:batch_size]))
+            batches.append((X[:batch_size], X_char[:batch_size], mask[:batch_size], Y[:batch_size]))
         else:
-            batches.append((X[int((i-1)*batch_size):int(i*batch_size)], mask[int((i-1)*batch_size):int(i*batch_size)], Y[int((i-1)*batch_size):int(i*batch_size)]))
+            batches.append((X[int((i-1)*batch_size):int(i*batch_size)], X_char[int((i-1)*batch_size):int(i*batch_size)], mask[int((i-1)*batch_size):int(i*batch_size)], Y[int((i-1)*batch_size):int(i*batch_size)]))
         i += 1
+    print("Done making batches.")
     return batches
 
 # Specifically for the neural nets.. easier to have matrices instead
@@ -114,6 +120,7 @@ def batch_data_nn(data_filename, label_filename, batch_size):
     actual_count = 0
     for i in range(len(x)):
         sen = x[i]
+        sen = sen.replace("\n", " ")
         words = sen.split(" ")
         if len(words) > max_len:
             continue
@@ -137,14 +144,83 @@ def batch_data_nn(data_filename, label_filename, batch_size):
         X_mask.append(np.array(mask))
         actual_count += 1
 
+
     X = np.array(X)
     X_mask = np.array(X_mask)
     Y = np.array(Y)
     X = np.reshape(X, (actual_count, max_len, embed_len))
+    X_char = get_char_embeddings(x)
+    # X_char = np.reshape(X_char, (actual_count, max_len, char_max_len, embed_len))
+
     X_mask = np.reshape(X_mask, (actual_count, max_len))
     Y = np.reshape(Y, (actual_count, 2))
-    batches = make_batches_nn(X, X_mask, Y, batch_size)
+    batches = make_batches_nn(X, X_char, X_mask, Y, batch_size)
     return batches
+
+def get_char_embeddings(x):
+    char_embeddings = glove2dict(char_embedding_path) 
+    padding_embed = np.array([0.0 for v in range(embed_len)])
+    X_char = [] 
+
+    print("Getting char embedding for ", len(x))
+    count = 0
+    for sentence in x: 
+        if (len(X_char) % 500 == 0):
+            print("Done with ", len(X_char))
+
+        sentence_embedding = [] 
+        sentence = sentence.replace("\n", " ")
+
+        words = sentence.split(" ")
+
+        if len(words) > max_len: 
+            continue
+
+        chars = [[char for char in word] for word in words]
+
+        bail_out = False
+        for word in chars:
+            word_embed = []
+
+            if len(word) > char_max_len:
+                bail_out = True
+                break
+
+            for w in word: 
+                if w not in char_embeddings:
+                    continue
+                word_embed.append(char_embeddings[w])
+
+            curr_len = len(word_embed)
+            if curr_len < char_max_len: 
+                word_embed = word_embed + [padding_embed for k in range(0, char_max_len-curr_len)]
+
+            sentence_embedding.append(word_embed)
+
+        if bail_out:
+            continue
+
+        for bah in sentence_embedding: 
+            if (len(bah) != char_max_len):
+                print(len(bah)) 
+
+        curr_sen_len = len(sentence_embedding) 
+        if curr_sen_len < max_len: 
+            for i in range(0, max_len-curr_sen_len):
+                new_word = [padding_embed for k in range(0, char_max_len)] 
+                sentence_embedding.append(np.array(new_word)) 
+
+        sentence_embedding = np.array(sentence_embedding)
+        X_char.append(sentence_embedding) 
+
+    print("Done with for loop")
+
+    # X_char = np.array(X_char)
+    print("Done with char embeddings...")
+    return X_char
+
+def get_char_dict():
+    return glove2dict(char_embedding_path)
 
 def split_batches(batches, train_split, valid_split):
     test_split = 1-train_split-valid_split
@@ -165,16 +241,19 @@ def split_batches(batches, train_split, valid_split):
 
 def get_split(dataset): 
     x_batches = []
+    x_char_batches = []
     x_masks = [] 
     y_batches = [] 
 
-    for batch, (x_batch, x_mask, y_batch) in enumerate(dataset):
+    for batch, (x_batch, x_char_batch, x_mask, y_batch) in enumerate(dataset):
         x_batches.append(x_batch) 
         x_masks.append(x_mask)
+        x_char_batches.append(x_char_batch)
         y_batches.append(y_batch) 
 
     X = np.concatenate(x_batches, axis=0)
     X_mask = np.concatenate(x_masks, axis=0)
+    X_char = np.concatenate(x_char_batches, axis=0)
     y = np.concatenate(y_batches, axis=0)
 
-    return (X, X_mask, y)
+    return (X, X_char, X_mask, y)

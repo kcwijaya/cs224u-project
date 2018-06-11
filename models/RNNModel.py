@@ -3,24 +3,30 @@ import tensorflow as tf
 from models.Model import Model
 from tensorflow.python.ops import rnn_cell 
 from models.util import Progbar 
-from data_util import batch_data_nn, split_batches
+from data_util import batch_data_nn, split_batches, get_char_dict
 from tensorflow.python.ops import variable_scope as vs
 from tensorflow.python.ops.rnn_cell import DropoutWrapper
 np.set_printoptions(threshold=np.nan)
 
 class RNNModel(Model): 
-	def __init__(self, depth = 5, lr = 0.001, max_length=70, regularization_factor = 0.001, keep_prob = 1, batch_size=200, hidden_size=150):
+	def __init__(self, depth = 5, lr = 0.001, max_length=70, kernel_size=5, filters=100, regularization_factor = 0.001, keep_prob = 0.5, batch_size=200, hidden_size=150):
 		self.lr = lr
 		self.regularization_factor = regularization_factor 
 		self.keep_prob = keep_prob
 		self.batch_size = batch_size
 		self.hidden_size = hidden_size
+		self.filters=filters 
+		self.kernel_size=kernel_size
 		self.depth = depth 
 		Model.__init__(self, max_length)
 
 	def build_graph(self): 
 		input_lens = tf.reduce_sum(self.X_mask_placeholder, axis=1) 
 		inputs = self.X_placeholder
+
+		char_embedding = self.convolve()
+		inputs = tf.concat([self.X_placeholder, char_embedding], axis=-1)
+		
 
 		for i in range(0, self.depth): 
 			lstm_cell_forward = rnn_cell.LSTMCell(self.hidden_size)
@@ -55,6 +61,41 @@ class RNNModel(Model):
 		preds = tf.argmax(logits, 1)
 
 		return logits, preds
+
+	# def generate_text(self, length):
+	# 	chars = get_char_dict()
+	# 	idx = [np.random.randint(len(chars.keys()))]
+	# 	y_char = chars.keys()[idx]
+	# 	X = np.zeros((1, length, len(chars.keys())))
+	# 	for i in range(0, length):
+	# 		X[0, i, :][idx[-1]] = 1
+	# 		ix = np.argmax(self.predict(X[:, :i+1, :])[0], 1)
+	# 		y_char.append(char.keys()[idx])
+	# 	return ('').join()
+
+	def convolve(self):
+		embedding_matrix = self.X_char_placeholder
+		embedding_matrix = tf.reshape(embedding_matrix, [-1, self.char_max_len, self.embedding_size])
+		embedding_matrix = tf.nn.dropout(embedding_matrix, self.keep_prob) 
+
+		conv = tf.layers.conv1d(
+			inputs=embedding_matrix, 
+			filters=self.filters,
+			kernel_size=self.kernel_size, 
+			padding="same", 
+			activation=tf.nn.relu)
+
+		conv = tf.layers.conv1d(
+			inputs=embedding_matrix, 
+			filters=self.filters, 
+			kernel_size=self.kernel_size, 
+			padding="same", 
+			activation=tf.nn.relu) 
+
+		conv = tf.reshape(conv, [-1, self.max_length, self.char_max_len, self.filters])
+		conv = tf.reduce_max(conv, axis=2)
+		return conv
+
 
 	def masked_softmax(self, logits, dim):
 	    """
@@ -101,7 +142,7 @@ class RNNModel(Model):
 	def optimizer(self, loss): 
 		return tf.train.AdamOptimizer(learning_rate=self.lr).minimize(loss)
 
-	def predict(self, X, mask, y, batch_size=None): 
+	def predict(self, X, chars, mask, y, batch_size=None): 
 		if batch_size is None: batch_size = len(X) 
 
 		preds = np.zeros((len(X)))
@@ -109,6 +150,7 @@ class RNNModel(Model):
 			ret = self.session.run(self.predictions,
 				{
 					self.X_placeholder : X[i:i+batch_size], 
+					self.X_char_placeholder : chars[i:i+batch_size],
 					self.y_placeholder: y[i:i+batch_size], 
 					self.X_mask_placeholder: mask[i:i+batch_size],
 					self.is_training : False
@@ -116,39 +158,7 @@ class RNNModel(Model):
 			preds[i:i+batch_size] = ret
 		return preds
 
-	# The main train loop
-	def fit(self, train_dataset, train_label_dataset, num_epochs=10):
-		print('Training Model...')
-		best_valid_loss = float('inf')
-		best_valid_accuracy = float('-inf')
-		batches = batch_data_nn('combined_data.pickle', 'labels.pickle', self.batch_size)
-
-		train_batches, (X_valid, X_mask_valid, y_valid), (X_test, X_mask_test, y_test) = split_batches(batches, 0.7, 0.2)
-
-		for epoch in range(1, num_epochs+1):
-			progbar = Progbar(target = len(train_batches)) 
-
-			print('Epoch #{0} out of {1}: '.format(epoch, num_epochs))
-			for batch, (X_batch, mask_batch, y_batch) in enumerate(train_batches):
-				train_loss, _, train_metrics = self.session.run((self.loss, self.train_op, self.metrics), {
-					self.X_placeholder : X_batch, 
-					self.y_placeholder: y_batch, 
-					self.X_mask_placeholder: mask_batch, 
-					self.is_training : True,
-				})
-				progbar.update(batch+1, [('Train Loss', train_loss), ('Accuracy', train_metrics)])
-
-			print("Epoch complete. Calculating validation loss...")
-
-			print('Training Loss: {0:.4f} {1} Training Accuracy {2:.4f} {3}'.format(train_loss, '*', train_metrics, '*'))
-			print(self.get_stats_table(X_valid, X_mask_valid, y_valid))
-
-		print("All Epochs complete. Calculating test loss...")
-
-		print(self.get_stats_table(X_test, X_mask_test, y_test))
-
-		print("Done training.")
-
+	
 	def save(self, filename): 
 		directory = os.path.dirname(filename) 
 		if not os.path.exists(directory):
