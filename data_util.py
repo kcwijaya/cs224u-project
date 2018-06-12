@@ -2,6 +2,7 @@ import pickle
 import numpy as np
 import os
 import sys 
+from compute_features import FeatureExtractor
 
 # Tune these params.
 max_len = 70
@@ -79,7 +80,7 @@ def batch_data(data_filename, label_filename, batch_size):
     numpy.random.set_state(rng_state)
     numpy.random.shuffle(b)
 
-def make_batches_nn(X, X_char, mask, Y, batch_size):
+def make_batches_nn(X, X_char, mask, Y, features, batch_size):
     state = np.random.get_state()
 
     np.random.shuffle(X)
@@ -89,6 +90,8 @@ def make_batches_nn(X, X_char, mask, Y, batch_size):
     np.random.shuffle(Y)
     np.random.set_state(state)
     np.random.shuffle(X_char)
+    np.random.set_state(state)
+    np.random.shuffle(features)
 
 
     batches = []
@@ -96,12 +99,23 @@ def make_batches_nn(X, X_char, mask, Y, batch_size):
     print("Making batches...")
     while i*batch_size < X.shape[0]: 
         if i == 0: 
-            batches.append((X[:batch_size], X_char[:batch_size], mask[:batch_size], Y[:batch_size]))
+            batches.append((X[:batch_size], X_char[:batch_size], mask[:batch_size], Y[:batch_size], features[:batch_size]))
         else:
-            batches.append((X[int((i-1)*batch_size):int(i*batch_size)], X_char[int((i-1)*batch_size):int(i*batch_size)], mask[int((i-1)*batch_size):int(i*batch_size)], Y[int((i-1)*batch_size):int(i*batch_size)]))
+            start = int((i-1)*batch_size)
+            end = int(i*batch_size)
+            batches.append((X[start:end], X_char[start:end], mask[start:end], Y[start:end], features[start:end]))
         i += 1
     print("Done making batches.")
     return batches
+
+def get_features(sentence, extractor):
+    rhyming = extractor.rhyming(sentence)
+    alliteration = extractor.alliteration(sentence) 
+    bigrams = extractor.average_bigram_count(sentence)
+    synonyms = extractor.synonym_measure(sentence)
+
+    # return [bigrams, synonyms, rhyming, alliteration]
+    return [bigrams]
 
 # Specifically for the neural nets.. easier to have matrices instead
 # of inidividual tuples
@@ -111,11 +125,14 @@ def batch_data_nn(data_filename, label_filename, batch_size):
     with open(label_filename, 'rb') as f:
         y = pickle.load(f, encoding='latin1')
     embeddings = []
+    extractor = FeatureExtractor()
+
     word_embeddings = glove2dict(embedding_path)
     padding_embed = np.array([0.0 for i in range(embed_len)])
     # print len(x)
     X = []
     Y = [] 
+    features = []
     X_mask = []
     actual_count = 0
     for i in range(len(x)):
@@ -139,22 +156,30 @@ def batch_data_nn(data_filename, label_filename, batch_size):
         embed_sen = embed_sen + [padding_embed] * (max_len-used_words)
         mask = [1] * used_words + [0] * (max_len-used_words)
 
+        feats = get_features(sen, extractor)
+
+        features_padding = np.array([0.0 for i in range(0, len(feats))])
+        sen_features = [feats] + [features_padding] * (max_len-1)
+
+        sen_features = np.array(sen_features)
+        features.append(sen_features)
+
         X.append(np.array(embed_sen))
         Y.append([1 if (y[i] == 1 and j == 1) or (y[i] == 0 and j == 0) else 0 for j in range(0, 2)])
         X_mask.append(np.array(mask))
         actual_count += 1
 
-
     X = np.array(X)
     X_mask = np.array(X_mask)
     Y = np.array(Y)
     X = np.reshape(X, (actual_count, max_len, embed_len))
+    features = np.array(features)
+    print(features.shape)
     X_char = get_char_embeddings(x)
-    # X_char = np.reshape(X_char, (actual_count, max_len, char_max_len, embed_len))
 
     X_mask = np.reshape(X_mask, (actual_count, max_len))
     Y = np.reshape(Y, (actual_count, 2))
-    batches = make_batches_nn(X, X_char, X_mask, Y, batch_size)
+    batches = make_batches_nn(X, X_char, X_mask, Y, features, batch_size)
     return batches
 
 def get_char_embeddings(x):
@@ -213,8 +238,6 @@ def get_char_embeddings(x):
         sentence_embedding = np.array(sentence_embedding)
         X_char.append(sentence_embedding) 
 
-    print("Done with for loop")
-
     # X_char = np.array(X_char)
     print("Done with char embeddings...")
     return X_char
@@ -244,16 +267,19 @@ def get_split(dataset):
     x_char_batches = []
     x_masks = [] 
     y_batches = [] 
+    features_batches = []
 
-    for batch, (x_batch, x_char_batch, x_mask, y_batch) in enumerate(dataset):
+    for batch, (x_batch, x_char_batch, x_mask, y_batch, features_batch) in enumerate(dataset):
         x_batches.append(x_batch) 
         x_masks.append(x_mask)
         x_char_batches.append(x_char_batch)
         y_batches.append(y_batch) 
+        features_batches.append(features_batch)
 
     X = np.concatenate(x_batches, axis=0)
     X_mask = np.concatenate(x_masks, axis=0)
     X_char = np.concatenate(x_char_batches, axis=0)
     y = np.concatenate(y_batches, axis=0)
+    features = np.concatenate(features_batches, axis=0)
 
-    return (X, X_char, X_mask, y)
+    return (X, X_char, X_mask, y, features)

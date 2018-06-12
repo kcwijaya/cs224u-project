@@ -1,6 +1,8 @@
 from collections import defaultdict
 from collections import Counter
-import cPickle as pickle
+# import cPickle as pickle python 2
+import pickle # python 3
+import nltk
 from nltk.corpus import wordnet as wn
 import csv
 import numpy as np
@@ -11,13 +13,25 @@ class FeatureExtractor:
     self.arpabet = nltk.corpus.cmudict.dict()
     self.bigrams = defaultdict(int)
     self.unigrams = defaultdict(int)
-    for line in open("w2_.txt", "r"):
+    for line in open("w2_.txt", "rb"):
       info = line.split()
+      info[1] = self.ensure_unicode(info[1])
+      info[2] = self.ensure_unicode(info[2])
+      info[0] = self.ensure_unicode(info[0])
+      if info[1] is None or info[2] is None or info[0] is None:
+        continue
       self.bigrams[(info[1], info[2])] = int(info[0])
     with open("unigram_freq.csv") as csvfile:
       r = csv.reader(csvfile, delimiter=',')
       for row in r:
-        self.unigrams[row[0]] = row[1]
+        self.unigrams[row[0]] = int(row[1])
+
+  def ensure_unicode(self, v):
+    try:
+      v = v.decode('utf-8')
+    except:
+      return None
+    return str(v)  # convert anything not a string to unicode too
 
   # We expect jokes to have lower average bigram counts since the vocab and sentence
   # structure is often less standard
@@ -35,11 +49,11 @@ class FeatureExtractor:
     max_syn_strength = 0
     for word in sentence.split():
       syn_strength = 0
-      synset = wn.synset(word)
-      if synset:
-        lemma = synset._lemma_names[0]
+      synsets = wn.synsets(word)
+      if len(synsets) > 0:
+        lemma = synsets[0]._lemma_names[0]
         if self.unigrams[lemma] > 0:
-          syn_strength += len(synset) * np.log(self.unigrams[lemma])
+          syn_strength += len(synsets) * np.log(self.unigrams[lemma])
       if syn_strength > max_syn_strength:
         max_syn_strength = syn_strength
     return max_syn_strength
@@ -49,14 +63,22 @@ class FeatureExtractor:
   def rhyming(self, sentence):
     ending_counts = Counter()
     for word in sentence:
-      ending_counts[self.arpabet[word][0][-2:]] += 1
+      word = word.lower()
+      if word in self.arpabet: 
+        key = self.arpabet[word][0][-2:]
+        key = " ".join(key)
+        ending_counts[key] += 1
     return ending_counts.most_common(1)[0][1]
 
   # Number of times the most common set of first 2 sounds occurs
   def alliteration(self, sentence):
     start_counts = Counter()
     for word in sentence:
-      start_counts[self.arpabet[word][0][:-2]] += 1
+      word = word.lower()
+      if word in self.arpabet:
+        key = self.arpabet[word][0][-2:]
+        key = " ".join(key)
+        start_counts[key] += 1
     return start_counts.most_common(1)[0][1]
 
 

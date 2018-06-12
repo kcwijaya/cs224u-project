@@ -42,12 +42,12 @@ def initialize_model(session, model, train_dir):
 
 def main():
 	
-	model = RNNModel()
+	model = RNNModel(name="bigrams")
 	
 	# Right now, not using any of the flags. This just runs two epochs. Sorta messy rn b/c
 	# we are dividing into validation set within the fit function instead of doing the split
 	# beforehand.
-	model.fit('combined_data.pickle', 'labels.pickle', num_epochs = 1)
+	model.fit('combined_data.pickle', 'labels.pickle', num_epochs = 5)
 	# for i in range(0, 20):
 	# 	text = model.generate_text(70)
 	# 	print(text)

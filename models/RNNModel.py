@@ -9,7 +9,7 @@ from tensorflow.python.ops.rnn_cell import DropoutWrapper
 np.set_printoptions(threshold=np.nan)
 
 class RNNModel(Model): 
-	def __init__(self, depth = 5, lr = 0.001, max_length=70, kernel_size=5, filters=100, regularization_factor = 0.001, keep_prob = 0.5, batch_size=200, hidden_size=150):
+	def __init__(self, name, depth = 5, lr = 0.001, max_length=70, kernel_size=5, filters=100, regularization_factor = 0.001, keep_prob = 0.5, batch_size=200, hidden_size=150):
 		self.lr = lr
 		self.regularization_factor = regularization_factor 
 		self.keep_prob = keep_prob
@@ -18,7 +18,7 @@ class RNNModel(Model):
 		self.filters=filters 
 		self.kernel_size=kernel_size
 		self.depth = depth 
-		Model.__init__(self, max_length)
+		Model.__init__(self, name, max_length)
 
 	def build_graph(self): 
 		input_lens = tf.reduce_sum(self.X_mask_placeholder, axis=1) 
@@ -26,7 +26,9 @@ class RNNModel(Model):
 
 		char_embedding = self.convolve()
 		inputs = tf.concat([self.X_placeholder, char_embedding], axis=-1)
-		
+		print(inputs.get_shape())
+		print(self.features.get_shape())
+		inputs = tf.concat([inputs, self.features], axis=-1)
 
 		for i in range(0, self.depth): 
 			lstm_cell_forward = rnn_cell.LSTMCell(self.hidden_size)
@@ -61,17 +63,6 @@ class RNNModel(Model):
 		preds = tf.argmax(logits, 1)
 
 		return logits, preds
-
-	# def generate_text(self, length):
-	# 	chars = get_char_dict()
-	# 	idx = [np.random.randint(len(chars.keys()))]
-	# 	y_char = chars.keys()[idx]
-	# 	X = np.zeros((1, length, len(chars.keys())))
-	# 	for i in range(0, length):
-	# 		X[0, i, :][idx[-1]] = 1
-	# 		ix = np.argmax(self.predict(X[:, :i+1, :])[0], 1)
-	# 		y_char.append(char.keys()[idx])
-	# 	return ('').join()
 
 	def convolve(self):
 		embedding_matrix = self.X_char_placeholder
@@ -142,7 +133,7 @@ class RNNModel(Model):
 	def optimizer(self, loss): 
 		return tf.train.AdamOptimizer(learning_rate=self.lr).minimize(loss)
 
-	def predict(self, X, chars, mask, y, batch_size=None): 
+	def predict(self, X, chars, mask, y, features, batch_size=None): 
 		if batch_size is None: batch_size = len(X) 
 
 		preds = np.zeros((len(X)))
@@ -153,12 +144,12 @@ class RNNModel(Model):
 					self.X_char_placeholder : chars[i:i+batch_size],
 					self.y_placeholder: y[i:i+batch_size], 
 					self.X_mask_placeholder: mask[i:i+batch_size],
+					self.features: features[i:i+batch_size],
 					self.is_training : False
 				})
 			preds[i:i+batch_size] = ret
 		return preds
 
-	
 	def save(self, filename): 
 		directory = os.path.dirname(filename) 
 		if not os.path.exists(directory):

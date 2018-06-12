@@ -5,9 +5,10 @@ from tensorflow.python.ops import variable_scope as vs
 import sklearn 
 from data_util import batch_data_nn, split_batches
 from models.util import Progbar 
+import os
 
 class Model: 
-    def __init__(self, max_length=70, char_max_len=20, glove_path = 'data/glove/glove.6B.300d.txt', glove_dims=300):
+    def __init__(self, name, max_length=70, char_max_len=20, glove_path = 'data/glove/glove.6B.300d.txt', glove_dims=300):
         self.num_classes = 2
         self.max_length = max_length
         self.char_max_len=20
@@ -25,6 +26,8 @@ class Model:
             # Adds the loss operator (cross entropy)
             self.loss = self.get_loss(self.y_placeholder, self.output) 
 
+            self.loss_summary = tf.summary.scalar("Loss", self.loss)
+            
             # The training op - AdamOptimizer 
             self.train_op = self.optimizer(self.loss) 
 
@@ -32,7 +35,11 @@ class Model:
 
             # # Gets metrics. Right now, just the accuracy. 
             self.metrics = self.get_metrics(self.y_placeholder, self.predictions)
+            self.metrics_summary = tf.summary.scalar("Accuracy", self.metrics)
             
+        log_file = "./logs/" + name
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        self.writer = tf.summary.FileWriter(log_file, self.session.graph)        
         self.session.run(tf.global_variables_initializer()) 
         print('Done building computation graph.') 
 
@@ -45,6 +52,7 @@ class Model:
         self.y_placeholder = tf.placeholder(tf.int32, [None, self.num_classes], name='Y_placeholder')
         self.X_char_placeholder = tf.placeholder(tf.float32, [None, self.max_length, self.char_max_len, self.embedding_size], name='X_char_placeholder')
         self.Y_placeholder = tf.placeholder(tf.float32, [None, self.char_max_len, self.embedding_size], name='X_placeholder')
+        self.features = tf.placeholder(tf.float32, [None, self.max_length, 1], name='Features')
         self.is_training = tf.placeholder(tf.bool, shape=())
 
     def add_embedding_layer(self, word_embeddings): 
@@ -68,31 +76,36 @@ class Model:
         best_valid_accuracy = float('-inf')
         batches = batch_data_nn('combined_data.pickle', 'labels.pickle', self.batch_size)
 
-        train_batches, (X_valid, X_char_valid,  X_mask_valid, y_valid), (X_test, X_test_valid, X_mask_test, y_test) = split_batches(batches, 0.7, 0.2)
+        train_batches, (X_valid, X_char_valid,  X_mask_valid, y_valid, features_valid), (X_test, X_char_test, X_mask_test, y_test, features_test) = split_batches(batches, 0.7, 0.2)
 
         print("Starting epochs.")
+        counter = 0
         for epoch in range(1, num_epochs+1):
             progbar = Progbar(target = len(train_batches)) 
 
             print('Epoch #{0} out of {1}: '.format(epoch, num_epochs))
-            for batch, (X_batch, X_char_batch, mask_batch, y_batch) in enumerate(train_batches):
-                train_loss, _, train_metrics = self.session.run((self.loss, self.train_op, self.metrics), {
+            for batch, (X_batch, X_char_batch, mask_batch, y_batch, features) in enumerate(train_batches):
+                train_loss, _, train_metrics, loss_summary, metrics_summary = self.session.run((self.loss, self.train_op, self.metrics, self.loss_summary, self.metrics_summary), {
                     self.X_placeholder : X_batch, 
                     self.y_placeholder: y_batch, 
                     self.X_char_placeholder : X_char_batch, 
+                    self.features: features,
                     self.X_mask_placeholder: mask_batch, 
                     self.is_training : True,
                 })
+                self.writer.add_summary(loss_summary, counter)
+                self.writer.add_summary(metrics_summary, counter)
                 progbar.update(batch+1, [('Train Loss', train_loss), ('Accuracy', train_metrics)])
+                counter += 1
+            print('Training Loss: {0:.4f} {1} Training Accuracy {2:.4f} {3}'.format(train_loss, '*', train_metrics, '*'))
 
             print("Epoch complete. Calculating validation loss...")
 
-            print('Training Loss: {0:.4f} {1} Training Accuracy {2:.4f} {3}'.format(train_loss, '*', train_metrics, '*'))
-            print(self.get_stats_table(X_valid, X_char_valid, X_mask_valid, y_valid))
+            print(self.get_stats_table(X_valid, X_char_valid, X_mask_valid, y_valid, features_valid))
 
         print("All Epochs complete. Calculating test loss...")
 
-        print(self.get_stats_table(X_test, X_char_test, X_mask_test, y_test))
+        print(self.get_stats_table(X_test, X_char_test, X_mask_test, y_test, features_test))
 
         print("Done training.")
 
@@ -124,14 +137,12 @@ class Model:
         return scores
 
 
-    def get_stats_table(self, X, chars, mask, y):
+    def get_stats_table(self, X, chars, mask, y, features):
         table  = '------------------------------------------------------------\n'
         table += '| Accuracy | Precision | Recall |   F1   |\n'
         table += '------------------------------------------------------------\n'  
     
-        print("Getting predictions...")
-        predictions = self.predict(X, chars, mask, y, self.batch_size)
-        print("Done getting predictions...")
+        predictions = self.predict(X, chars, mask, y, features, self.batch_size)
         y = np.argmax(y, 1)
         accuracy = self.get_accuracies(predictions, y)
         metrics = self.get_precision_recall_f1(predictions, y)
