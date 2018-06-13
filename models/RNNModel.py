@@ -9,7 +9,7 @@ from tensorflow.python.ops.rnn_cell import DropoutWrapper
 np.set_printoptions(threshold=np.nan)
 
 class RNNModel(Model): 
-	def __init__(self, name, depth = 5, lr = 0.001, max_length=70, kernel_size=5, filters=100, regularization_factor = 0.001, keep_prob = 0.5, batch_size=200, hidden_size=150):
+	def __init__(self, name, depth = 5, lr = 0.001, max_length=822, kernel_size=5, filters=100, regularization_factor = 0.001, keep_prob = 0.5, batch_size=200, hidden_size=150):
 		self.lr = lr
 		self.regularization_factor = regularization_factor 
 		self.keep_prob = keep_prob
@@ -26,8 +26,6 @@ class RNNModel(Model):
 
 		char_embedding = self.convolve()
 		inputs = tf.concat([self.X_placeholder, char_embedding], axis=-1)
-		# print(inputs.get_shape())
-		# print(self.features.get_shape())
 		inputs = tf.concat([inputs, self.features], axis=-1)
 
 		for i in range(0, self.depth): 

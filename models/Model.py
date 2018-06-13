@@ -77,7 +77,11 @@ class Model:
         best_valid_accuracy = float('-inf')
         batches, X_raw = batch_data_nn('combined_data.pickle', 'labels.pickle', self.batch_size)
         train_batches, (X_valid, X_char_valid,  X_mask_valid, y_valid, features_valid), (X_test, X_char_test, X_mask_test, y_test, features_test), X_raw = split_batches(batches,X_raw, 0.7, 0.2)
-
+=======
+# >>>>>>> 432e3591d40b7c1b5ad82ece875213b9bdb9de0c
+#
+#         train_batches, (X_valid, X_char_valid,  X_mask_valid, y_valid, features_valid), (X_test, X_char_test, X_mask_test, y_test, features_test), X_raw_test = split_batches(batches, X_raw, 0.7, 0.2)
+        print(X_raw_test)
         print("Starting epochs.")
         counter = 0
         for epoch in range(1, num_epochs+1):

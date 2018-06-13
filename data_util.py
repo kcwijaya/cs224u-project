@@ -180,7 +180,18 @@ def batch_data_nn(data_filename, label_filename, batch_size):
         features.append(sen_features)
 
         X.append(np.array(embed_sen))
-        Y.append([1 if (y[i] == 1 and j == 1) or (y[i] == 0 and j == 0) else 0 for j in range(0, 2)])
+        y_val = []
+        if y[i] == 1:
+            y_val.append(0)
+        else: 
+            y_val.append(1)
+
+        if y[i] == 0:
+            y_val.append(0)
+        else:
+            y_val.append(1)
+        Y.append(y_val)
+        # Y.append([1 if (y[i] == 1 and j == 1) or (y[i] == 0 and j == 0) else 0 for j in range(0, 2)])
         X_mask.append(np.array(mask))
         actual_count += 1
 
