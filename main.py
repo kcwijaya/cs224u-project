@@ -34,20 +34,20 @@ tf.app.flags.DEFINE_integer("keep", 1, "How many checkpoints to keep. 0 indicate
 tf.app.flags.DEFINE_string("train_dir", "", "Training directory to save the model parameters and other info. Defaults to experiments/{experiment_name}")
 tf.app.flags.DEFINE_string("glove_path", "", "Path to glove .txt file. Defaults to data/glove.6B.100d.txt")
 tf.app.flags.DEFINE_string("data_dir", DEFAULT_DATA_DIR, "Where to find preprocessed SQuAD data for training. Defaults to data/")
-
+tf.app.flags.DEFINE_string("experiment", "", "Experiment")
 FLAGS = tf.app.flags.FLAGS 
 
 def initialize_model(session, model, train_dir):
 	session.run(tf.global_variables_initializer())
 
 def main():
-	
-	model = RNNModel(name="bigrams")
+	print(FLAGS.experiment)
+	model = RNNModel(name=FLAGS.experiment)
 	
 	# Right now, not using any of the flags. This just runs two epochs. Sorta messy rn b/c
 	# we are dividing into validation set within the fit function instead of doing the split
 	# beforehand.
-	model.fit('combined_data.pickle', 'labels.pickle', num_epochs = 5)
+	model.fit('combined_data.pickle', 'labels.pickle', num_epochs = 1)
 	# for i in range(0, 20):
 	# 	text = model.generate_text(70)
 	# 	print(text)

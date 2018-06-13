@@ -158,4 +158,3 @@ class RNNModel(Model):
 	def load(self, filename):
 		tf.train.Saver().restore(self.session, filename) 
 
-
