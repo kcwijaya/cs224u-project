@@ -3,6 +3,7 @@ import numpy as np
 import os
 import sys 
 from compute_features import FeatureExtractor
+import random 
 
 # Tune these params.
 max_len = 70
@@ -80,20 +81,32 @@ def batch_data(data_filename, label_filename, batch_size):
     numpy.random.set_state(rng_state)
     numpy.random.shuffle(b)
 
-def make_batches_nn(X, X_char, mask, Y, features, batch_size):
-    state = np.random.get_state()
-
-    np.random.shuffle(X)
-    np.random.set_state(state) 
-    np.random.shuffle(mask)
-    np.random.set_state(state) 
-    np.random.shuffle(Y)
-    np.random.set_state(state)
-    np.random.shuffle(X_char)
-    np.random.set_state(state)
-    np.random.shuffle(features)
-
-
+def make_batches_nn(X, X_char, mask, Y, features, batch_size, X_raw):
+    # state = np.random.get_state()
+    #
+    # np.random.shuffle(X)
+    # np.random.set_state(state) 
+    # np.random.shuffle(mask)
+    # np.random.set_state(state) 
+    # np.random.shuffle(Y)
+    # np.random.set_state(state)
+    # np.random.shuffle(X_char)
+    # np.random.set_state(state)
+    # np.random.shuffle(features)
+    # np.random.set_state(state)
+    # np.random.shuffle(X_raw)
+    #
+    
+    shuffled = list(zip(X, X_char, mask, Y, features, X_raw))
+    random.shuffle(shuffled)
+    X, X_char, mask, Y, features, X_raw = zip(*shuffled)
+    X = np.array(X)
+    X_char = np.array(X_char)
+    mask = np.array(mask)
+    Y = np.array(Y)
+    features = np.array(features)
+    X_raw = np.array(X_raw)
+    
     batches = []
     i = 0
     print("Making batches...")
@@ -106,7 +119,7 @@ def make_batches_nn(X, X_char, mask, Y, features, batch_size):
             batches.append((X[start:end], X_char[start:end], mask[start:end], Y[start:end], features[start:end]))
         i += 1
     print("Done making batches.")
-    return batches
+    return batches, X_raw
 
 def get_features(sentence, extractor):
     rhyming = extractor.rhyming(sentence)
@@ -115,7 +128,7 @@ def get_features(sentence, extractor):
     synonyms = extractor.synonym_measure(sentence)
 
     # return [bigrams, synonyms, rhyming, alliteration]
-    return [bigrams]
+    return [bigrams, alliteration, bigrams, synonyms]
 
 # Specifically for the neural nets.. easier to have matrices instead
 # of inidividual tuples
@@ -131,6 +144,7 @@ def batch_data_nn(data_filename, label_filename, batch_size):
     padding_embed = np.array([0.0 for i in range(embed_len)])
     # print len(x)
     X = []
+    X_raw = []
     Y = [] 
     features = []
     X_mask = []
@@ -138,6 +152,7 @@ def batch_data_nn(data_filename, label_filename, batch_size):
     for i in range(len(x)):
         sen = x[i]
         sen = sen.replace("\n", " ")
+        X_raw.append(sen)
         words = sen.split(" ")
         if len(words) > max_len:
             continue
@@ -174,13 +189,13 @@ def batch_data_nn(data_filename, label_filename, batch_size):
     Y = np.array(Y)
     X = np.reshape(X, (actual_count, max_len, embed_len))
     features = np.array(features)
-    print(features.shape)
     X_char = get_char_embeddings(x)
+    X_raw = np.array(X_raw)
 
     X_mask = np.reshape(X_mask, (actual_count, max_len))
     Y = np.reshape(Y, (actual_count, 2))
-    batches = make_batches_nn(X, X_char, X_mask, Y, features, batch_size)
-    return batches
+    batches, X_raw = make_batches_nn(X, X_char, X_mask, Y, features, batch_size, X_raw)
+    return batches, X_raw
 
 def get_char_embeddings(x):
     char_embeddings = glove2dict(char_embedding_path) 
@@ -245,7 +260,7 @@ def get_char_embeddings(x):
 def get_char_dict():
     return glove2dict(char_embedding_path)
 
-def split_batches(batches, train_split, valid_split):
+def split_batches(batches, X_raw, train_split, valid_split):
     test_split = 1-train_split-valid_split
     total_batches = len(batches)
     num_train_batches = int(np.ceil(total_batches*train_split))
@@ -254,13 +269,14 @@ def split_batches(batches, train_split, valid_split):
     train_batches = batches[:num_train_batches]
     validation_set = batches[num_train_batches:num_valid_batches]
     test_set = batches[num_valid_batches:]
+    X_raw = X_raw[num_valid_batches:]
 
     print("Data composition: train split", train_split, "("+ str(num_train_batches) + ")", "valid split", valid_split, "(" + str(num_valid_batches) + ")", "test split", test_split, "(" + str(num_test_batches) + ")")
 
     valid_batches = get_split(validation_set)
     test_batches = get_split(test_set)
 
-    return train_batches, valid_batches, test_batches
+    return train_batches, valid_batches, test_batches, X_raw
 
 def get_split(dataset): 
     x_batches = []

@@ -26,8 +26,8 @@ class RNNModel(Model):
 
 		char_embedding = self.convolve()
 		inputs = tf.concat([self.X_placeholder, char_embedding], axis=-1)
-		print(inputs.get_shape())
-		print(self.features.get_shape())
+		# print(inputs.get_shape())
+		# print(self.features.get_shape())
 		inputs = tf.concat([inputs, self.features], axis=-1)
 
 		for i in range(0, self.depth): 
@@ -159,5 +159,4 @@ class RNNModel(Model):
 
 	def load(self, filename):
 		tf.train.Saver().restore(self.session, filename) 
-
 
